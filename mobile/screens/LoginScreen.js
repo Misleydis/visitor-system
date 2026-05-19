@@ -5,7 +5,7 @@ import {
   Platform, Dimensions
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { login } from '../services/api';
 
 const { width, height } = Dimensions.get('window');
@@ -81,11 +81,7 @@ export default function LoginScreen({ navigation }) {
                 onPress={() => setShowPassword(!showPassword)}
                 style={styles.eyeIcon}
               >
-                <Icon
-                  name={showPassword ? "visibility" : "visibility-off"}
-                  size={24}
-                  color="#7f8c8d"
-                />
+                 <MaterialIcons name={showPassword ? "visibility" : "visibility-off"} size={24} color="#7f8c8d" />
               </TouchableOpacity>
             </View>
 

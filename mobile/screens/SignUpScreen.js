@@ -4,7 +4,7 @@ import {
   Alert, ActivityIndicator, ScrollView, KeyboardAvoidingView,
   Platform
 } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import { MaterialIcons, FontAwesome } from '@expo/vector-icons';
 import Ionicons from 'react-native-vector-icons/Ionicons';  // <-- add this
 import { registerUser } from '../services/api';
 
@@ -88,7 +88,7 @@ export default function SignUpScreen({ navigation }) {
           <View style={styles.passwordContainer}>
             <TextInput style={styles.passwordInput} placeholder="Enter your password" secureTextEntry={!showPassword} value={password} onChangeText={setPassword} />
             <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
-              <Icon name={showPassword ? "visibility" : "visibility-off"} size={22} color="#7f8c8d" />
+            <MaterialIcons name={showPassword ? "visibility" : "visibility-off"} size={22} color="#7f8c8d" />
             </TouchableOpacity>
           </View>
 
@@ -118,11 +118,11 @@ export default function SignUpScreen({ navigation }) {
 
           <View style={styles.socialButtonsRow}>
             <TouchableOpacity style={styles.socialButton} onPress={() => Alert.alert('Google', 'Coming soon')}>
-              <Ionicons name="logo-google" size={20} color="#db4437" />
+            <FontAwesome name="google" size={20} color="#db4437" />
               <Text style={styles.socialButtonText}>Google</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.socialButton} onPress={() => Alert.alert('Apple', 'Coming soon')}>
-              <Ionicons name="logo-apple" size={20} color="#000" />
+            <FontAwesome name="apple" size={20} color="#000" />
               <Text style={styles.socialButtonText}>Apple</Text>
             </TouchableOpacity>
           </View>

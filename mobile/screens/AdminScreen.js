@@ -3,9 +3,9 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView,
   Alert, ActivityIndicator, RefreshControl
 } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { getAllVisitors, getTodayVisitors, getUsers, createUser, deleteUser, getPendingUsers, approveUser } from '../services/api';
 import { LineChart, ProgressChart } from 'react-native-chart-kit';
-import Icon from 'react-native-vector-icons/MaterialIcons';
 
 export default function AdminDashboard({ navigation }) {
   const [visitors, setVisitors] = useState([]);
@@ -82,19 +82,17 @@ export default function AdminDashboard({ navigation }) {
     try {
       await approveUser(userId, role);
       Alert.alert('Success', `User approved as ${role}`);
-      loadData(); // refresh all lists
+      loadData();
     } catch (err) {
       Alert.alert('Error', err.response?.data?.msg || 'Approval failed');
     }
   };
 
-  // Calculate stats
   const totalVisitors = visitors.length;
   const activeVisitors = todayVisitors.filter(v => v.status === 'active').length;
   const completedToday = todayVisitors.filter(v => v.status === 'completed').length;
   const totalUsers = users.length;
 
-  // Prepare chart data (last 7 days)
   const last7Days = () => {
     const days = [];
     for (let i = 6; i >= 0; i--) {
@@ -148,22 +146,22 @@ export default function AdminDashboard({ navigation }) {
       {/* Stats Cards Row */}
       <View style={styles.statsRow}>
         <View style={[styles.card, styles.statCard]}>
-          <Icon name="people" size={32} color="#3498db" />
+          <MaterialIcons name="people" size={32} color="#3498db" />
           <Text style={styles.statValue}>{totalVisitors}</Text>
           <Text style={styles.statLabel}>Total Visitors</Text>
         </View>
         <View style={[styles.card, styles.statCard]}>
-          <Icon name="access-time" size={32} color="#f39c12" />
+          <MaterialIcons name="access-time" size={32} color="#f39c12" />
           <Text style={styles.statValue}>{activeVisitors}</Text>
           <Text style={styles.statLabel}>Active Now</Text>
         </View>
         <View style={[styles.card, styles.statCard]}>
-          <Icon name="check-circle" size={32} color="#2ecc71" />
+          <MaterialIcons name="check-circle" size={32} color="#2ecc71" />
           <Text style={styles.statValue}>{completedToday}</Text>
           <Text style={styles.statLabel}>Completed</Text>
         </View>
         <View style={[styles.card, styles.statCard]}>
-          <Icon name="supervised-user-circle" size={32} color="#9b59b6" />
+          <MaterialIcons name="supervised-user-circle" size={32} color="#9b59b6" />
           <Text style={styles.statValue}>{totalUsers}</Text>
           <Text style={styles.statLabel}>System Users</Text>
         </View>
@@ -235,16 +233,16 @@ export default function AdminDashboard({ navigation }) {
       {/* Quick Actions */}
       <View style={styles.actionsRow}>
         <TouchableOpacity style={styles.actionBtn} onPress={() => setShowUserForm(!showUserForm)}>
-          <Icon name="person-add" size={20} color="#fff" />
+          <MaterialIcons name="person-add" size={20} color="#fff" />
           <Text style={styles.actionText}>Add User</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionBtn} onPress={() => Alert.alert('Export', 'Export feature coming soon')}>
-          <Icon name="print" size={20} color="#fff" />
+          <MaterialIcons name="print" size={20} color="#fff" />
           <Text style={styles.actionText}>Export Report</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Add User Form (toggle) */}
+      {/* Add User Form */}
       {showUserForm && (
         <View style={styles.formCard}>
           <Text style={styles.formTitle}>Create New User</Text>
@@ -274,7 +272,7 @@ export default function AdminDashboard({ navigation }) {
               <Text style={styles.userEmail}>{u.email} ({u.role || 'pending'})</Text>
             </View>
             <TouchableOpacity onPress={() => handleDeleteUser(u._id)}>
-              <Icon name="delete" size={22} color="#e74c3c" />
+              <MaterialIcons name="delete" size={22} color="#e74c3c" />
             </TouchableOpacity>
           </View>
         ))}
