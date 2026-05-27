@@ -24,7 +24,8 @@ export default function LoginScreen({ navigation }) {
     setLoading(true);
     try {
       const res = await login(email, password);
-      await AsyncStorage.setItem('token', res.data.token);
+      await AsyncStorage.setItem('accessToken', res.data.accessToken);
+      await AsyncStorage.setItem('refreshToken', res.data.refreshToken);
       await AsyncStorage.setItem('user', JSON.stringify(res.data.user));
       const role = res.data.user.role;
       if (role === 'security') navigation.replace('Security');
@@ -84,7 +85,9 @@ export default function LoginScreen({ navigation }) {
                  <MaterialIcons name={showPassword ? "visibility" : "visibility-off"} size={24} color="#7f8c8d" />
               </TouchableOpacity>
             </View>
-
+            <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
+  <Text style={styles.forgotLink}>Forgot Password?</Text>
+</TouchableOpacity>
             <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
               {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Sign In</Text>}
             </TouchableOpacity>
@@ -185,6 +188,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
+  forgotLink: { marginTop: 10, color: '#7f8c8d', fontSize: 14, textAlign: 'right', alignSelf: 'flex-end' },
   signUpLink: {
     marginTop: 15,
     color: '#3498db',

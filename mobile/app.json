@@ -1,0 +1,11 @@
+{
+    "expo": {
+      "name": "Visitor Management",
+      "slug": "visitor-management",
+      "version": "1.0.0",
+      "orientation": "portrait",
+      "android": {
+        "package": "com.mycompany.visitormanager"
+      }
+    }
+  }

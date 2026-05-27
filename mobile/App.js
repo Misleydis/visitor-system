@@ -1,22 +1,47 @@
+// visitor-system/mobile/App.js
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import LoginScreen from './screens/LoginScreen';
 import SignUpScreen from './screens/SignUpScreen';
-import SecurityScreen from './screens/SecurityScreen';
+import SecurityStack from './screens/SecurityStack';
 import ReceptionScreen from './screens/ReceptionScreen';
 import AdminScreen from './screens/AdminScreen';
+import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
+import VerifyCodeScreen from './screens/VerifyCodeScreen';
+import ResetPasswordScreen from './screens/ResetPasswordScreen';
+import OccurrenceBookScreen from './screens/OccurrenceBookScreen';
 
 const Stack = createStackNavigator();
+
+const MyTheme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    background: '#f5f5f5',
+  },
+};
+
 export default function App() {
   return (
-    <NavigationContainer>
-      <Stack.Navigator initialRouteName="Login">
+    <NavigationContainer theme={MyTheme}>
+      <Stack.Navigator
+        initialRouteName="Login"
+        screenOptions={{
+          headerStyle: { backgroundColor: '#2c3e50' },
+          headerTintColor: '#fff',
+          headerTitleStyle: { fontWeight: 'bold' },
+        }}
+      >
         <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ title: 'Forgot Password' }} />
+<Stack.Screen name="VerifyCode" component={VerifyCodeScreen} options={{ title: 'Verify Code' }} />
+<Stack.Screen name="ResetPassword" component={ResetPasswordScreen} options={{ title: 'Reset Password' }} />
         <Stack.Screen name="SignUp" component={SignUpScreen} options={{ title: 'Create Account' }} />
-        <Stack.Screen name="Security" component={SecurityScreen} options={{ title: 'Security Panel' }} />
+        <Stack.Screen name="Security" component={SecurityStack} options={{ headerShown: false }} />
         <Stack.Screen name="Reception" component={ReceptionScreen} options={{ title: 'Reception Panel' }} />
         <Stack.Screen name="Admin" component={AdminScreen} options={{ title: 'Admin Dashboard' }} />
+        <Stack.Screen name="OccurrenceBook" component={OccurrenceBookScreen} options={{ title: 'Occurrence Book' }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

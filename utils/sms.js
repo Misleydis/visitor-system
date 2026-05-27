@@ -1,34 +1,39 @@
 let client = null;
 let twilioReady = false;
 
-// Only initialize Twilio if credentials are present and valid format
-if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER) {
-  if (process.env.TWILIO_ACCOUNT_SID.startsWith('AC')) {
+if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_ACCOUNT_SID.startsWith('AC')) {
+  try {
     const twilio = require('twilio');
     client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
     twilioReady = true;
     console.log('✅ Twilio SMS service ready');
-  } else {
-    console.warn('⚠️ TWILIO_ACCOUNT_SID does not start with AC – SMS disabled');
+  } catch (err) {
+    console.warn('⚠️ Twilio init failed:', err.message);
   }
 } else {
-  console.warn('⚠️ Twilio credentials missing – SMS notifications disabled');
+  console.warn('⚠️ Twilio credentials missing – SMS disabled');
 }
 
 async function sendSMS(to, ticketNumber, firstName) {
-  if (!twilioReady) {
-    console.log(`[SMS disabled] Would send to ${to}: Ticket ${ticketNumber} for ${firstName}`);
+  if (!twilioReady || !client) {
+    console.log(`[SMS disabled] Would send to ${to}: ticket ${ticketNumber} for ${firstName}`);
     return null;
   }
   try {
+    // Ensure phone number is in E.164 format (add + if missing)
+    let formattedNumber = to.trim();
+    if (!formattedNumber.startsWith('+')) {
+      formattedNumber = '+' + formattedNumber;
+    }
     const message = await client.messages.create({
       body: `Welcome ${firstName}! Your visitor ticket number is ${ticketNumber}. Please present this number at reception.`,
       from: process.env.TWILIO_PHONE_NUMBER,
-      to: to
+      to: formattedNumber,
     });
+    console.log(`✅ SMS sent to ${formattedNumber}, SID: ${message.sid}`);
     return message;
   } catch (error) {
-    console.error('SMS error:', error.message);
+    console.error('❌ Twilio error:', error.message, error.code);
     return null;
   }
 }
