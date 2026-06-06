@@ -1,13 +1,33 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, StyleSheet, KeyboardAvoidingView, Platform, Modal } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
-import { getNextEntryNumber, createOBEntry, getMyOBEntries, getAllOBEntries, signOffOBEntries, getSecurityGuards } from '../services/api';
+import React, { useState, useEffect, useLayoutEffect } from 'react';
+import {
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView,
+  Platform, RefreshControl, FlatList, Modal
+} from 'react-native';
+import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { 
+  getAllOBEntries, 
+  getMyOBEntries, 
+  createOBEntry, 
+  signOffOBEntries, 
+  getSecurityGuards 
+} from '../services/api';
 
-const SITES = ['head office', 'phase I', 'phase II', 'phase III', 'phase IV', 'phase V', 'phase VI', 'phase VII', 'phase VIII', 'phase IX', 'phase X', 'phase XI', 'phase XII', 'the gate', '2 acres'];
+const SITES = [
+  'Select site',
+  'Head Office',
+  'Phase I', 'Phase II', 'Phase III', 'Phase IV', 'Phase V',
+  'Phase VI', 'Phase VII', 'Phase VIII', 'Phase IX', 'Phase X',
+  'Phase XI', 'Phase XII', 'The Gate', '2 Acres'
+];
 
-export default function OccurrenceBookScreen({ route }) {
+export default function OccurrenceBookScreen({ route, navigation }) {
   const { user } = route.params;
   const isSecurityAdmin = user.role === 'security_admin' || user.role === 'it_admin' || user.role === 'admin';
+  
   const [form, setForm] = useState({
     date: new Date().toISOString().split('T')[0],
     time: new Date().toTimeString().split(' ')[0].substring(0, 5),
@@ -15,22 +35,23 @@ export default function OccurrenceBookScreen({ route }) {
     occurrence: '',
     site: ''
   });
-  const [loading, setLoading] = useState(false);
   const [entries, setEntries] = useState([]);
-  const [showEntries, setShowEntries] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(isSecurityAdmin ? '' : new Date().toISOString().split('T')[0]);
   const [guards, setGuards] = useState([]);
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedGuard, setSelectedGuard] = useState('');
+  const [selectedGuardName, setSelectedGuardName] = useState('');
   const [selectedSite, setSelectedSite] = useState('');
+  const [showAllEntries, setShowAllEntries] = useState(false);
+  const [showFilterDatePicker, setShowFilterDatePicker] = useState(false);
+  const [showSitePicker, setShowSitePicker] = useState(false);
+  const [showGuardPicker, setShowGuardPicker] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [showSignModal, setShowSignModal] = useState(false);
-  const [signData, setSignData] = useState({ securityId: '', date: '', initials: user.initials || '' });
-
-  useEffect(() => {
-    loadEntries();
-    if (isSecurityAdmin) {
-      loadGuards();
-    }
-  }, [selectedDate, selectedGuard, selectedSite]);
+  const [signData, setSignData] = useState({ entryId: '', initials: user.initials || '' });
+  const [refreshing, setRefreshing] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [sitePickerVisible, setSitePickerVisible] = useState(false);
 
   const loadGuards = async () => {
     try {
@@ -38,7 +59,6 @@ export default function OccurrenceBookScreen({ route }) {
       setGuards(response.data);
     } catch (err) {
       console.error('Error loading guards:', err);
-      Alert.alert('Error', err.response?.data?.msg || 'Failed to load guards');
     }
   };
 
@@ -46,28 +66,25 @@ export default function OccurrenceBookScreen({ route }) {
     try {
       let response;
       if (isSecurityAdmin) {
-        // Only pass date filter if a date is selected, otherwise show all
-        const dateFilter = selectedDate ? selectedDate : '';
-        response = await getAllOBEntries(dateFilter, dateFilter, selectedGuard, selectedSite);
+        const dateFilter = showAllEntries ? '' : selectedDate;
+        const siteFilter = selectedSite ? selectedSite.toLowerCase() : '';
+        response = await getAllOBEntries(dateFilter, dateFilter, selectedGuard, siteFilter);
       } else {
         response = await getMyOBEntries(selectedDate, selectedDate);
       }
       setEntries(response.data);
     } catch (err) {
       console.error('Error loading entries:', err);
-      Alert.alert('Error', err.response?.data?.msg || 'Failed to load entries');
+      Alert.alert('Error', 'Failed to load entries');
     }
   };
 
-  const fetchNextEntryNumber = async (site) => {
-    if (!site) return;
-    try {
-      const response = await getNextEntryNumber(site);
-      setForm({ ...form, site, entryNumber: response.data.nextEntryNumber.toString() });
-    } catch (err) {
-      Alert.alert('Error', 'Failed to get entry number');
+  useEffect(() => {
+    if (isSecurityAdmin) {
+      loadGuards();
     }
-  };
+    loadEntries();
+  }, [selectedDate, selectedGuard, selectedSite, showAllEntries]);
 
   const generateInitials = (name) => {
     if (!name) return '';
@@ -106,18 +123,9 @@ export default function OccurrenceBookScreen({ route }) {
     }
   };
 
-  const formatDate = (dateStr) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString();
-  };
-
-  const formatTime = (timeStr) => {
-    return timeStr;
-  };
-
   const handleSignOff = async () => {
-    if (!signData.securityId || !signData.date) {
-      Alert.alert('Error', 'Please fill all fields');
+    if (!signData.entryId) {
+      Alert.alert('Error', 'Please select an entry to sign off');
       return;
     }
     const initials = signData.initials || generateInitials(user.name);
@@ -127,10 +135,10 @@ export default function OccurrenceBookScreen({ route }) {
     }
     setLoading(true);
     try {
-      await signOffOBEntries({ ...signData, initials });
-      Alert.alert('Success', 'Signed off successfully');
+      await signOffOBEntries({ entryId: signData.entryId, initials });
+      Alert.alert('Success', 'Entry signed off successfully');
       setShowSignModal(false);
-      setSignData({ securityId: '', date: '', initials: user.initials || generateInitials(user.name) });
+      setSignData({ entryId: '', initials: user.initials || generateInitials(user.name) });
       loadEntries();
     } catch (err) {
       Alert.alert('Error', err.response?.data?.msg || 'Server error');
@@ -139,271 +147,835 @@ export default function OccurrenceBookScreen({ route }) {
     }
   };
 
-  const openSignModal = (securityId, date) => {
-    setSignData({ securityId, date, initials: user.initials || generateInitials(user.name) });
+  const openSignModal = (entryId) => {
+    setSignData({ 
+      entryId,
+      initials: user.initials || generateInitials(user.name) 
+    });
     setShowSignModal(true);
   };
 
-  const groupEntriesByGuardAndDate = () => {
+  const groupEntriesByGuardAndDate = (entries) => {
     const grouped = {};
     entries.forEach(entry => {
-      const key = `${entry.securityId._id}-${entry.date}`;
-      if (!grouped[key]) {
-        grouped[key] = {
-          securityId: entry.securityId,
-          date: entry.date,
-          entries: []
-        };
+      const guardId = entry.securityId._id || entry.securityId;
+      const guardName = entry.securityId.name || 'Unknown';
+      const date = new Date(entry.date).toISOString().split('T')[0];
+      
+      if (!grouped[guardId]) {
+        grouped[guardId] = { guardName, dates: {} };
       }
-      grouped[key].entries.push(entry);
+      if (!grouped[guardId].dates[date]) {
+        grouped[guardId].dates[date] = [];
+      }
+      grouped[guardId].dates[date].push(entry);
     });
-    return Object.values(grouped);
+    return grouped;
   };
 
-  const groupedEntries = isSecurityAdmin ? groupEntriesByGuardAndDate() : null;
+  const fetchNextEntryNumber = async (site) => {
+    if (!site) return;
+    try {
+      const response = await getAllOBEntries('', '', '', site.toLowerCase());
+      const maxEntry = response.data.reduce((max, entry) => Math.max(max, entry.entryNumber), 0);
+      setForm({ ...form, site, entryNumber: (maxEntry + 1).toString() });
+    } catch (err) {
+      setForm({ ...form, site, entryNumber: '1' });
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadEntries();
+    setRefreshing(false);
+  };
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity onPress={() => navigation.replace('Login')} style={{ marginRight: 15 }}>
+          <MaterialIcons name="logout" size={24} color="#fff" />
+        </TouchableOpacity>
+      ),
+      headerStyle: { backgroundColor: '#0a1929' },
+      headerTintColor: '#fff',
+    });
+  }, [navigation]);
+
+  const formatDate = (d) => d.toISOString().split('T')[0];
+  const formatTime = (t) => t.toTimeString().split(' ')[0].slice(0, 5);
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
-      <ScrollView style={styles.container}>
-        <TouchableOpacity style={styles.viewEntriesButton} onPress={() => setShowEntries(true)}>
-          <Text style={styles.viewEntriesButtonText}>{isSecurityAdmin ? 'View All Entries' : 'View My Entries'}</Text>
-        </TouchableOpacity>
-
-        {!isSecurityAdmin && (
-          <>
-            <Text style={styles.sectionTitle}>Create New Entry</Text>
-
-            <Text style={styles.label}>Date *</Text>
-            <TextInput
-              style={styles.input}
-              value={form.date}
-              onChangeText={(t) => setForm({ ...form, date: t })}
-              placeholder="YYYY-MM-DD"
-            />
-
-            <Text style={styles.label}>Time *</Text>
-            <TextInput
-              style={styles.input}
-              value={form.time}
-              onChangeText={(t) => setForm({ ...form, time: t })}
-              placeholder="HH:MM"
-            />
-
-            <Text style={styles.label}>Site *</Text>
-            <Picker
-              selectedValue={form.site}
-              onValueChange={(v) => fetchNextEntryNumber(v)}
-            >
-              <Picker.Item label="Select site" value="" color="grey" />
-              {SITES.map(s => <Picker.Item key={s} label={s} value={s} />)}
-            </Picker>
-
-            <Text style={styles.label}>Entry Number *</Text>
-            <TextInput
-              style={[styles.input, styles.disabledInput]}
-              value={form.entryNumber}
-              editable={false}
-              placeholder="Auto-generated"
-            />
-
-            <Text style={styles.label}>Occurrence *</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              value={form.occurrence}
-              onChangeText={(t) => setForm({ ...form, occurrence: t })}
-              placeholder="Describe the occurrence..."
-              multiline
-              numberOfLines={4}
-            />
-
-            <TouchableOpacity style={styles.button} onPress={handleSubmit} disabled={loading}>
-              <Text style={styles.buttonText}>{loading ? 'Creating...' : 'Create Entry'}</Text>
-            </TouchableOpacity>
-          </>
-        )}
-
-        {isSecurityAdmin && (
-          <View style={styles.filterSection}>
-            <Text style={styles.sectionTitle}>Filters</Text>
-            <Text style={styles.label}>Security Guard</Text>
-            <Picker
-              selectedValue={selectedGuard}
-              onValueChange={setSelectedGuard}
-            >
-              <Picker.Item label="All Guards" value="" />
-              {guards.map(g => <Picker.Item key={g._id} label={g.name} value={g._id} />)}
-            </Picker>
-
-            <Text style={styles.label}>Site</Text>
-            <Picker
-              selectedValue={selectedSite}
-              onValueChange={setSelectedSite}
-            >
-              <Picker.Item label="All Sites" value="" />
-              {SITES.map(s => <Picker.Item key={s} label={s} value={s} />)}
-            </Picker>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={{ flex: 1, backgroundColor: '#0a1929' }}
+    >
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 40 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {/* Header with gradient and abstract shapes */}
+        <LinearGradient
+          colors={['#0a1929', '#0d2b3e', '#143e5a']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerGradient}
+        >
+          <View style={styles.headerContent}>
+            <Text style={styles.mainTitle}>Occurrence Book</Text>
+            <Text style={styles.subTitle}>
+              {isSecurityAdmin ? 'View and sign off entries' : 'Record your daily occurrences'}
+            </Text>
           </View>
-        )}
-      </ScrollView>
+        </LinearGradient>
 
-      <Modal visible={showEntries} animationType="slide">
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>My OB Entries</Text>
-            <TouchableOpacity onPress={() => setShowEntries(false)}>
-              <Text style={styles.closeButton}>Close</Text>
-            </TouchableOpacity>
-          </View>
+        {/* Floating white content container */}
+        <View style={styles.floatingContainer}>
+          {/* Admin Filters */}
+          {isSecurityAdmin && (
+            <View style={styles.filterCard}>
+              <Text style={styles.filterTitle}>Filters</Text>
+              
+              {/* Today / All Toggle */}
+              <View style={styles.toggleRow}>
+                <TouchableOpacity
+                  style={[styles.toggleBtn, !showAllEntries && styles.toggleBtnActive]}
+                  onPress={() => setShowAllEntries(false)}
+                >
+                  <Text style={[styles.toggleBtnText, !showAllEntries && styles.toggleBtnTextActive]}>Today</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.toggleBtn, showAllEntries && styles.toggleBtnActive]}
+                  onPress={() => setShowAllEntries(true)}
+                >
+                  <Text style={[styles.toggleBtnText, showAllEntries && styles.toggleBtnTextActive]}>All Entries</Text>
+                </TouchableOpacity>
+              </View>
 
-          <View style={styles.dateFilter}>
-            <Text style={styles.label}>Filter by Date:</Text>
-            <TextInput
-              style={styles.input}
-              value={selectedDate}
-              onChangeText={setSelectedDate}
-              placeholder="YYYY-MM-DD"
-            />
-            <TouchableOpacity style={styles.filterButton} onPress={loadEntries}>
-              <Text style={styles.filterButtonText}>Filter</Text>
-            </TouchableOpacity>
-          </View>
+              {/* Date Picker */}
+              <View style={styles.filterRow}>
+                <TouchableOpacity
+                  style={styles.filterInput}
+                  onPress={() => setShowFilterDatePicker(true)}
+                >
+                  <Text style={selectedDate ? styles.filterInputText : styles.filterInputPlaceholder}>
+                    {selectedDate || 'Select Date'}
+                  </Text>
+                  <MaterialIcons name="calendar-today" size={20} color="#7f8c8d" />
+                </TouchableOpacity>
+              </View>
+              
+              {/* Site Picker */}
+              <View style={styles.filterRow}>
+                <TouchableOpacity
+                  style={styles.filterInput}
+                  onPress={() => setShowSitePicker(true)}
+                >
+                  <Text style={selectedSite ? styles.filterInputText : styles.filterInputPlaceholder}>
+                    {selectedSite || 'Filter by Site'}
+                  </Text>
+                  <MaterialIcons name="arrow-drop-down" size={20} color="#7f8c8d" />
+                </TouchableOpacity>
+              </View>
+              
+              {/* Guard Picker */}
+              <View style={styles.filterRow}>
+                <TouchableOpacity
+                  style={styles.filterInput}
+                  onPress={() => setShowGuardPicker(true)}
+                >
+                  <Text style={selectedGuardName ? styles.filterInputText : styles.filterInputPlaceholder}>
+                    {selectedGuardName || 'Filter by Guard'}
+                  </Text>
+                  <MaterialIcons name="arrow-drop-down" size={20} color="#7f8c8d" />
+                </TouchableOpacity>
+              </View>
 
-          <ScrollView style={styles.entriesList}>
+              {(selectedGuard || selectedSite) && (
+                <TouchableOpacity
+                  style={styles.clearAllBtn}
+                  onPress={() => {
+                    setSelectedGuard('');
+                    setSelectedGuardName('');
+                    setSelectedSite('');
+                  }}
+                >
+                  <Text style={styles.clearAllBtnText}>Clear Filters</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          {/* Create Entry Form (for security) */}
+          {!isSecurityAdmin && (
+            <View style={styles.formCard}>
+              <Text style={styles.formTitle}>Create New Entry</Text>
+              <Text style={styles.formSub}>Fill in the details below to log a new occurrence</Text>
+
+              {/* Date Field */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Date</Text>
+                <TouchableOpacity style={styles.inputContainer} onPress={() => setShowDatePicker(true)}>
+                  <Text style={styles.inputText}>{formatDate(new Date(form.date))}</Text>
+                  <MaterialIcons name="calendar-today" size={20} color="#7f8c8d" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Time Field */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Time</Text>
+                <TouchableOpacity style={styles.inputContainer} onPress={() => setShowTimePicker(true)}>
+                  <Text style={styles.inputText}>{form.time}</Text>
+                  <MaterialIcons name="access-time" size={20} color="#7f8c8d" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Entry Number */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Entry Number</Text>
+                <TextInput
+                  style={styles.inputContainer}
+                  placeholder="Auto-generated"
+                  value={form.entryNumber}
+                  onChangeText={(text) => setForm({ ...form, entryNumber: text })}
+                  keyboardType="numeric"
+                />
+              </View>
+
+              {/* Site Picker */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Site</Text>
+                <TouchableOpacity
+                  style={styles.inputContainer}
+                  onPress={() => setSitePickerVisible(true)}
+                >
+                  <Text style={styles.inputText}>{form.site || 'Select site'}</Text>
+                  <MaterialIcons name="arrow-drop-down" size={20} color="#7f8c8d" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Occurrence */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Occurrence</Text>
+                <TextInput
+                  style={[styles.inputContainer, styles.textArea]}
+                  placeholder="Describe the occurrence"
+                  value={form.occurrence}
+                  onChangeText={(text) => setForm({ ...form, occurrence: text })}
+                  multiline
+                />
+              </View>
+
+              {/* Submit Button */}
+              <TouchableOpacity
+                style={styles.submitBtn}
+                onPress={handleSubmit}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.submitBtnText}>Create Entry</Text>
+                )}
+              </TouchableOpacity>
+
+              {/* View My Entries Button */}
+              <TouchableOpacity
+                style={styles.viewEntriesBtn}
+                onPress={() => navigation.navigate('MyOccurrenceEntries', { user })}
+              >
+                <Text style={styles.viewEntriesBtnText}>View My Entries</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Entries List */}
+          <View style={styles.entriesCard}>
+            <Text style={styles.entriesTitle}>
+              {isSecurityAdmin ? 'All Entries' : 'My Entries'}
+            </Text>
             {entries.length === 0 ? (
-              <Text style={styles.noEntries}>No entries for this date</Text>
-            ) : isSecurityAdmin ? (
-              groupedEntries.map((group, idx) => (
-                <View key={idx} style={styles.groupCard}>
-                  <View style={styles.groupHeader}>
-                    <Text style={styles.groupGuard}>{group.securityId.name}</Text>
-                    <Text style={styles.groupDate}>{formatDate(group.date)}</Text>
-                  </View>
-                  
-                  {group.entries.map((entry) => (
-                    <View key={entry._id} style={styles.entryCard}>
-                      <Text style={styles.entryTime}>{formatTime(entry.time)} - Entry #{entry.entryNumber}</Text>
-                      <Text style={styles.entrySite}>{entry.site}</Text>
-                      <Text style={styles.entryOccurrence}>{entry.occurrence}</Text>
-                      <Text style={styles.entryInitials}>Security: {entry.securityInitials}</Text>
-                      
-                      {entry.adminSignatures && entry.adminSignatures.length > 0 && (
-                        <View style={styles.signaturesSection}>
-                          <Text style={styles.signaturesTitle}>Signed by:</Text>
-                          {entry.adminSignatures.map((sig, sigIdx) => (
-                            <Text key={sigIdx} style={styles.signature}>
-                              {sig.adminInitials} ({sig.adminId?.name || 'Unknown'})
-                            </Text>
+              <Text style={styles.emptyText}>No entries found</Text>
+            ) : (
+              <>
+                {isSecurityAdmin ? (
+                  Object.entries(groupEntriesByGuardAndDate(entries)).map(([guardId, { guardName, dates }]) => (
+                    <View key={guardId} style={styles.guardSection}>
+                      <Text style={styles.guardName}>{guardName}</Text>
+                      {Object.entries(dates).map(([date, dateEntries]) => (
+                        <View key={date} style={styles.dateSection}>
+                          <Text style={styles.dateText}>{date}</Text>
+                          {dateEntries.map((entry) => (
+                            <View key={entry._id} style={styles.entryItem}>
+                              <View style={styles.entryHeader}>
+                                <Text style={styles.entryNumber}>#{entry.entryNumber}</Text>
+                                {!entry.adminSignatures || entry.adminSignatures.length === 0 ? (
+                                  <TouchableOpacity
+                                    style={styles.signBtn}
+                                    onPress={() => openSignModal(entry._id)}
+                                  >
+                                    <Text style={styles.signBtnText}>Sign Off</Text>
+                                  </TouchableOpacity>
+                                ) : (
+                                  <Text style={styles.signedText}>
+                                    Signed by: {entry.adminSignatures.map(s => s.adminInitials).join(', ')}
+                                  </Text>
+                                )}
+                              </View>
+                              <Text style={styles.entryTime}>{entry.time}</Text>
+                              <Text style={styles.entryOccurrence}>{entry.occurrence}</Text>
+                              <Text style={styles.entrySite}>{entry.site}</Text>
+                            </View>
                           ))}
                         </View>
-                      )}
-                    </View>
-                  ))}
-
-                  <TouchableOpacity
-                    style={styles.signButton}
-                    onPress={() => openSignModal(group.securityId._id, group.date)}
-                  >
-                    <Text style={styles.signButtonText}>Sign Off</Text>
-                  </TouchableOpacity>
-                </View>
-              ))
-            ) : (
-              entries.map((entry) => (
-                <View key={entry._id} style={styles.entryCard}>
-                  <Text style={styles.entryDate}>{formatDate(entry.date)} at {formatTime(entry.time)}</Text>
-                  <Text style={styles.entryNumber}>Entry #{entry.entryNumber}</Text>
-                  <Text style={styles.entrySite}>Site: {entry.site}</Text>
-                  <Text style={styles.entryOccurrence}>{entry.occurrence}</Text>
-                  <Text style={styles.entryInitials}>Signed: {entry.securityInitials}</Text>
-                  
-                  {entry.adminSignatures && entry.adminSignatures.length > 0 && (
-                    <View style={styles.signaturesSection}>
-                      <Text style={styles.signaturesTitle}>Admin Signatures:</Text>
-                      {entry.adminSignatures.map((sig, idx) => (
-                        <Text key={idx} style={styles.signature}>
-                          {sig.adminInitials} - {new Date(sig.signedAt).toLocaleString()}
-                        </Text>
                       ))}
                     </View>
-                  )}
-                </View>
-              ))
+                  ))
+                ) : (
+                  entries.map((entry) => (
+                    <View key={entry._id} style={styles.entryItem}>
+                      <Text style={styles.entryNumber}>#{entry.entryNumber}</Text>
+                      <Text style={styles.entryDate}>{new Date(entry.date).toLocaleDateString()}</Text>
+                      <Text style={styles.entryTime}>{entry.time}</Text>
+                      <Text style={styles.entryOccurrence}>{entry.occurrence}</Text>
+                      <Text style={styles.entrySite}>{entry.site}</Text>
+                      {entry.adminSignatures && entry.adminSignatures.length > 0 && (
+                        <Text style={styles.signedText}>
+                          Signed by: {entry.adminSignatures.map(s => s.adminInitials).join(', ')}
+                        </Text>
+                      )}
+                    </View>
+                  ))
+                )}
+              </>
             )}
-          </ScrollView>
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Date Picker Modal */}
+      {showDatePicker && (
+        <DateTimePicker
+          value={new Date(form.date)}
+          mode="date"
+          display="default"
+          onChange={(event, selectedDate) => {
+            setShowDatePicker(false);
+            if (selectedDate) {
+              setForm({ ...form, date: formatDate(selectedDate) });
+            }
+          }}
+        />
+      )}
+
+      {/* Time Picker Modal */}
+      {showTimePicker && (
+        <DateTimePicker
+          value={new Date(`2000-01-01T${form.time}`)}
+          mode="time"
+          display="default"
+          onChange={(event, selectedTime) => {
+            setShowTimePicker(false);
+            if (selectedTime) {
+              setForm({ ...form, time: formatTime(selectedTime) });
+            }
+          }}
+        />
+      )}
+
+      {/* Site Picker Modal */}
+      <Modal
+        visible={sitePickerVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSitePickerVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Select Site</Text>
+            <ScrollView>
+              {SITES.map((site) => (
+                <TouchableOpacity
+                  key={site}
+                  style={styles.modalItem}
+                  onPress={() => {
+                    setForm({ ...form, site });
+                    setSitePickerVisible(false);
+                    fetchNextEntryNumber(site);
+                  }}
+                >
+                  <Text style={styles.modalItemText}>{site}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <TouchableOpacity
+              style={styles.modalCloseBtn}
+              onPress={() => setSitePickerVisible(false)}
+            >
+              <Text style={styles.modalCloseBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </Modal>
 
-      {showSignModal && (
-        <Modal visible={showSignModal} animationType="slide">
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Sign Off Entries</Text>
-              <TouchableOpacity onPress={() => setShowSignModal(false)}>
-                <Text style={styles.closeButton}>Close</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalContent}>
-              <Text style={styles.label}>Your Initials</Text>
-              <TextInput
-                style={styles.input}
-                value={signData.initials}
-                onChangeText={(t) => setSignData({ ...signData, initials: t })}
-                placeholder="Enter your initials"
-              />
-
-              <Text style={styles.infoText}>
-                You are signing off all entries for this guard on {formatDate(signData.date)}
-              </Text>
-
-              <TouchableOpacity style={styles.button} onPress={handleSignOff} disabled={loading}>
-                <Text style={styles.buttonText}>{loading ? 'Signing...' : 'Sign Off'}</Text>
-              </TouchableOpacity>
-            </ScrollView>
+      {/* Sign Off Modal */}
+      <Modal
+        visible={showSignModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowSignModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Sign Off Entry</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Your Initials"
+              value={signData.initials}
+              onChangeText={(text) => setSignData({ ...signData, initials: text })}
+            />
+            <TouchableOpacity
+              style={styles.modalSubmitBtn}
+              onPress={handleSignOff}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.modalSubmitBtnText}>Sign Off</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.modalCloseBtn}
+              onPress={() => setShowSignModal(false)}
+            >
+              <Text style={styles.modalCloseBtnText}>Cancel</Text>
+            </TouchableOpacity>
           </View>
-        </Modal>
+        </View>
+      </Modal>
+
+      {/* Filter Date Picker */}
+      {showFilterDatePicker && (
+        <DateTimePicker
+          value={new Date(selectedDate || new Date())}
+          mode="date"
+          display="default"
+          onChange={(event, selectedDate) => {
+            setShowFilterDatePicker(false);
+            if (selectedDate) {
+              setSelectedDate(selectedDate.toISOString().split('T')[0]);
+            }
+          }}
+        />
       )}
+
+      {/* Site Picker Modal */}
+      <Modal
+        visible={showSitePicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowSitePicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Select Site</Text>
+            <ScrollView>
+              {SITES.map((site) => (
+                <TouchableOpacity
+                  key={site}
+                  style={styles.modalItem}
+                  onPress={() => {
+                    setSelectedSite(site === 'Select site' ? '' : site);
+                    setShowSitePicker(false);
+                  }}
+                >
+                  <Text style={styles.modalItemText}>{site}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <TouchableOpacity
+              style={styles.modalCloseBtn}
+              onPress={() => setShowSitePicker(false)}
+            >
+              <Text style={styles.modalCloseBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Guard Picker Modal */}
+      <Modal
+        visible={showGuardPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowGuardPicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Select Guard</Text>
+            <ScrollView>
+              <TouchableOpacity
+                style={styles.modalItem}
+                onPress={() => {
+                  setSelectedGuard('');
+                  setSelectedGuardName('');
+                  setShowGuardPicker(false);
+                }}
+              >
+                <Text style={styles.modalItemText}>All Guards</Text>
+              </TouchableOpacity>
+              {guards.map((guard) => (
+                <TouchableOpacity
+                  key={guard._id}
+                  style={styles.modalItem}
+                  onPress={() => {
+                    setSelectedGuard(guard._id);
+                    setSelectedGuardName(guard.name);
+                    setShowGuardPicker(false);
+                  }}
+                >
+                  <Text style={styles.modalItemText}>{guard.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <TouchableOpacity
+              style={styles.modalCloseBtn}
+              onPress={() => setShowGuardPicker(false)}
+            >
+              <Text style={styles.modalCloseBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: '#fff' },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginTop: 20, marginBottom: 10 },
-  viewEntriesButton: { backgroundColor: '#3498db', padding: 15, borderRadius: 8, alignItems: 'center', marginBottom: 20 },
-  viewEntriesButtonText: { color: '#fff', fontWeight: 'bold' },
-  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, marginBottom: 15 },
-  disabledInput: { backgroundColor: '#f0f0f0' },
-  textArea: { height: 100, textAlignVertical: 'top' },
-  label: { fontWeight: 'bold', marginBottom: 5 },
-  button: { backgroundColor: '#2ecc71', padding: 15, borderRadius: 8, alignItems: 'center', marginTop: 10 },
-  buttonText: { color: '#fff', fontWeight: 'bold' },
-  modalContainer: { flex: 1, backgroundColor: '#fff' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#ddd' },
-  modalTitle: { fontSize: 18, fontWeight: 'bold' },
-  closeButton: { color: '#3498db', fontSize: 16 },
-  dateFilter: { padding: 20, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  filterButton: { backgroundColor: '#3498db', padding: 10, borderRadius: 8 },
-  filterButtonText: { color: '#fff', fontWeight: 'bold' },
-  entriesList: { flex: 1, padding: 20 },
-  noEntries: { textAlign: 'center', color: '#999', marginTop: 50 },
-  entryCard: { backgroundColor: '#f9f9f9', padding: 15, borderRadius: 8, marginBottom: 15, borderWidth: 1, borderColor: '#ddd' },
-  entryDate: { fontWeight: 'bold', color: '#2c3e50' },
-  entryNumber: { color: '#3498db', fontWeight: 'bold', marginTop: 5 },
-  entrySite: { color: '#666', marginTop: 5 },
-  entryOccurrence: { marginTop: 10, lineHeight: 20 },
-  entryInitials: { marginTop: 10, fontStyle: 'italic', color: '#666' },
-  signaturesSection: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#ddd' },
-  signaturesTitle: { fontWeight: 'bold', color: '#2c3e50' },
-  signature: { color: '#27ae60', marginTop: 5 },
-  filterSection: { backgroundColor: '#f9f9f9', padding: 15, borderRadius: 8, marginBottom: 20 },
-  groupCard: { backgroundColor: '#f9f9f9', padding: 15, borderRadius: 8, marginBottom: 15, borderWidth: 1, borderColor: '#ddd' },
-  groupHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#ddd' },
-  groupGuard: { fontWeight: 'bold', fontSize: 16, color: '#2c3e50' },
-  groupDate: { color: '#666' },
-  entryTime: { fontWeight: 'bold', color: '#2c3e50' },
-  signButton: { backgroundColor: '#27ae60', padding: 12, borderRadius: 8, alignItems: 'center', marginTop: 10 },
-  signButtonText: { color: '#fff', fontWeight: 'bold' },
-  modalContent: { padding: 20 },
-  infoText: { color: '#666', marginVertical: 20, textAlign: 'center' }
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  headerGradient: {
+    padding: 30,
+    paddingTop: 60,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+  },
+  headerContent: {
+    alignItems: 'center',
+  },
+  mainTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 8,
+  },
+  subTitle: {
+    fontSize: 16,
+    color: '#bdc3c7',
+    textAlign: 'center',
+  },
+  floatingContainer: {
+    padding: 15,
+    marginTop: -20,
+  },
+  filterCard: {
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    padding: 15,
+    marginBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  filterTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 10,
+  },
+  filterRow: {
+    marginBottom: 12,
+  },
+  filterInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    backgroundColor: '#f9f9f9',
+  },
+  filterInputText: {
+    fontSize: 14,
+    color: '#2c3e50',
+  },
+  filterInputPlaceholder: {
+    fontSize: 14,
+    color: '#7f8c8d',
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    marginBottom: 15,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 8,
+    padding: 4,
+  },
+  toggleBtn: {
+    flex: 1,
+    padding: 10,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  toggleBtnActive: {
+    backgroundColor: '#3498db',
+  },
+  toggleBtnText: {
+    fontSize: 14,
+    color: '#7f8c8d',
+    fontWeight: '600',
+  },
+  toggleBtnTextActive: {
+    color: '#fff',
+  },
+  clearAllBtn: {
+    backgroundColor: '#e74c3c',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  clearAllBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  entryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  formCard: {
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    padding: 15,
+    marginBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  formTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 5,
+  },
+  formSub: {
+    fontSize: 14,
+    color: '#7f8c8d',
+    marginBottom: 15,
+  },
+  inputGroup: {
+    marginBottom: 15,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#34495e',
+    marginBottom: 8,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: '#f9f9f9',
+  },
+  inputText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#2c3e50',
+  },
+  textArea: {
+    height: 80,
+    textAlignVertical: 'top',
+  },
+  submitBtn: {
+    backgroundColor: '#3498db',
+    borderRadius: 8,
+    padding: 15,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  submitBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  viewEntriesBtn: {
+    backgroundColor: '#2ecc71',
+    borderRadius: 8,
+    padding: 15,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  viewEntriesBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  entriesCard: {
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    padding: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  entriesTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 15,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#7f8c8d',
+    textAlign: 'center',
+    padding: 20,
+  },
+  guardSection: {
+    marginBottom: 20,
+  },
+  guardName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 10,
+  },
+  dateSection: {
+    marginBottom: 15,
+  },
+  dateText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#34495e',
+    marginBottom: 10,
+  },
+  signBtn: {
+    backgroundColor: '#2ecc71',
+    borderRadius: 15,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  signBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  entryItem: {
+    backgroundColor: '#f9f9f9',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+  },
+  entryNumber: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+  },
+  entryDate: {
+    fontSize: 12,
+    color: '#7f8c8d',
+  },
+  entryTime: {
+    fontSize: 12,
+    color: '#7f8c8d',
+  },
+  entryOccurrence: {
+    fontSize: 14,
+    color: '#34495e',
+    marginTop: 4,
+  },
+  entrySite: {
+    fontSize: 12,
+    color: '#7f8c8d',
+  },
+  signedText: {
+    fontSize: 12,
+    color: '#27ae60',
+    marginTop: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    padding: 20,
+    width: '80%',
+    maxHeight: '80%',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 15,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 15,
+    fontSize: 14,
+  },
+  modalSubmitBtn: {
+    backgroundColor: '#2ecc71',
+    borderRadius: 8,
+    padding: 15,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  modalSubmitBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  modalCloseBtn: {
+    backgroundColor: '#e74c3c',
+    borderRadius: 8,
+    padding: 15,
+    alignItems: 'center',
+  },
+  modalCloseBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  modalItem: {
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  modalItemText: {
+    fontSize: 16,
+    color: '#2c3e50',
+  },
 });

@@ -32,12 +32,15 @@ router.get('/next-entry/:site', auth, async (req, res) => {
 router.post('/', auth, async (req, res) => {
   try {
     const { date, time, entryNumber, occurrence, site, initials } = req.body;
-    const securityId = req.user._id;
+    const securityId = req.user.id;
     
     // Convert entryNumber to number for comparison
     const numericEntryNumber = parseInt(entryNumber, 10);
     
     const user = await User.findById(securityId);
+    if (!user) {
+      return res.status(404).json({ msg: 'User not found' });
+    }
     
     // Use provided initials or generate from user name
     const entryInitials = initials || user.initials || user.name.split(' ').map(w => w[0]).join('').toUpperCase();
@@ -72,7 +75,8 @@ router.post('/', auth, async (req, res) => {
     await obEntry.save();
     res.json(obEntry);
   } catch (err) {
-    res.status(500).json({ msg: 'Server error' });
+    console.error('Error creating OB entry:', err);
+    res.status(500).json({ msg: 'Server error', error: err.message });
   }
 });
 
@@ -80,7 +84,7 @@ router.post('/', auth, async (req, res) => {
 router.get('/my-entries', auth, async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
-    const securityId = req.user._id;
+    const securityId = req.user.id;
     
     let query = { securityId };
     
@@ -138,7 +142,7 @@ router.get('/all', auth, async (req, res) => {
 router.post('/sign-off', auth, async (req, res) => {
   try {
     const { securityId, date, initials } = req.body;
-    const adminId = req.user._id;
+    const adminId = req.user.id;
     
     // IT admin, security admin, and admin can sign off
     const user = await User.findById(adminId);

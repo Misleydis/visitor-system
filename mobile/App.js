@@ -11,6 +11,7 @@ import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import VerifyCodeScreen from './screens/VerifyCodeScreen';
 import ResetPasswordScreen from './screens/ResetPasswordScreen';
 import OccurrenceBookScreen from './screens/OccurrenceBookScreen';
+import MyOccurrenceEntries from './screens/MyOccurrenceEntries';
 
 const Stack = createStackNavigator();
 
@@ -42,6 +43,7 @@ export default function App() {
         <Stack.Screen name="Reception" component={ReceptionScreen} options={{ title: 'Reception Panel' }} />
         <Stack.Screen name="Admin" component={AdminScreen} options={{ title: 'Admin Dashboard' }} />
         <Stack.Screen name="OccurrenceBook" component={OccurrenceBookScreen} options={{ title: 'Occurrence Book' }} />
+        <Stack.Screen name="MyOccurrenceEntries" component={MyOccurrenceEntries} options={{ title: 'My Entries' }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

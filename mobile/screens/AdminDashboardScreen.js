@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView,
   Alert, ActivityIndicator, RefreshControl, Dimensions
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -16,7 +16,7 @@ import { LineChart, ProgressChart } from 'react-native-chart-kit';
 
 const { width } = Dimensions.get('window');
 
-export default function AdminScreen({ navigation }) {
+export default function AdminDashboardScreen({ navigation }) {
   const [visitors, setVisitors] = useState([]);
   const [todayVisitors, setTodayVisitors] = useState([]);
   const [users, setUsers] = useState([]);
@@ -30,8 +30,6 @@ export default function AdminScreen({ navigation }) {
   const [showTrendDatePicker, setShowTrendDatePicker] = useState(false);
   const [selectedDailyDate, setSelectedDailyDate] = useState(new Date());
   const [selectedTrendDate, setSelectedTrendDate] = useState(new Date());
-  const [showAllVisitors, setShowAllVisitors] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
   const handleLogout = async () => {
     await AsyncStorage.removeItem('accessToken');
@@ -123,7 +121,7 @@ export default function AdminScreen({ navigation }) {
     try {
       await createUser(newUser);
       Alert.alert('Success', 'User created');
-      setNewUser({ name: '', email: '', password: '', role: 'security', initials: '' });
+      setNewUser({ name: '', email: '', password: '', role: 'security' });
       setShowUserForm(false);
       loadData();
     } catch (err) {
@@ -134,20 +132,7 @@ export default function AdminScreen({ navigation }) {
   const handleDeleteUser = async (id) => {
     Alert.alert('Delete', 'Delete this user?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', onPress: async () => { 
-        try {
-          console.log('Deleting user with ID:', id);
-          const response = await deleteUser(id);
-          console.log('Delete response:', response);
-          Alert.alert('Success', 'User deleted');
-          loadData();
-        } catch (err) {
-          console.error('Delete user error:', err);
-          console.error('Error response:', err.response);
-          const errorMsg = err.response?.data?.msg || err.response?.data?.error || err.message || 'Failed to delete user';
-          Alert.alert('Error', errorMsg);
-        }
-      }}
+      { text: 'Delete', onPress: async () => { await deleteUser(id); loadData(); } }
     ]);
   };
 
@@ -267,23 +252,15 @@ export default function AdminScreen({ navigation }) {
     ]
   };
 
-  const displayVisitors = showAllVisitors 
-    ? [...visitors].sort((a, b) => new Date(b.timeIn) - new Date(a.timeIn))
-    : [...visitors].sort((a, b) => new Date(b.timeIn) - new Date(a.timeIn)).slice(0, 10);
-
-  const handleToggleViewAll = () => {
-    setShowAllVisitors(prev => !prev);
-  };
+  const recentVisitors = [...visitors]
+    .sort((a, b) => new Date(b.timeIn) - new Date(a.timeIn))
+    .slice(0, 10);
 
   return (
     <ScrollView
       style={styles.container}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
-      <View style={styles.header}>
-        <Text style={styles.subtitle}>Visitor insights & management</Text>
-      </View>
-
       {/* Stats Cards */}
       <View style={styles.statsRow}>
         <View style={[styles.card, styles.statCard]}>
@@ -377,33 +354,20 @@ export default function AdminScreen({ navigation }) {
       {showUserForm && (
         <View style={styles.formCard}>
           <Text style={styles.formTitle}>Create New User</Text>
-          <ScrollView style={styles.formScrollView}>
-            <TextInput style={styles.input} placeholder="Full Name" value={newUser.name} onChangeText={t => setNewUser({...newUser, name: t})} />
-            <TextInput style={styles.input} placeholder="Email" value={newUser.email} onChangeText={t => setNewUser({...newUser, email: t})} autoCapitalize="none" />
-            <View style={styles.passwordContainer}>
-              <TextInput 
-                style={styles.passwordInput} 
-                placeholder="Password" 
-                value={newUser.password} 
-                onChangeText={t => setNewUser({...newUser, password: t})} 
-                secureTextEntry={!showPassword}
-              />
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
-                <MaterialIcons name={showPassword ? 'visibility-off' : 'visibility'} size={24} color="#7f8c8d" />
+          <TextInput style={styles.input} placeholder="Full Name" value={newUser.name} onChangeText={t => setNewUser({...newUser, name: t})} />
+          <TextInput style={styles.input} placeholder="Email" value={newUser.email} onChangeText={t => setNewUser({...newUser, email: t})} autoCapitalize="none" />
+          <TextInput style={styles.input} placeholder="Password" secureTextEntry value={newUser.password} onChangeText={t => setNewUser({...newUser, password: t})} />
+          <TextInput style={styles.input} placeholder="Initials" value={newUser.initials} onChangeText={t => setNewUser({...newUser, initials: t})} />
+          <View style={styles.roleRow}>
+            {['security','reception','admin','security_admin'].map(role => (
+              <TouchableOpacity key={role} style={[styles.roleBtn, newUser.role === role && styles.roleActive]} onPress={() => setNewUser({...newUser, role})}>
+                <Text>{role.replace('_', ' ').toUpperCase()}</Text>
               </TouchableOpacity>
-            </View>
-            <TextInput style={styles.input} placeholder="Initials" value={newUser.initials} onChangeText={t => setNewUser({...newUser, initials: t})} />
-            <View style={styles.roleRow}>
-              {['security','reception','admin','security_admin'].map(role => (
-                <TouchableOpacity key={role} style={[styles.roleBtn, newUser.role === role && styles.roleActive]} onPress={() => setNewUser({...newUser, role})}>
-                  <Text style={styles.roleBtnText}>{role.replace('_', ' ').toUpperCase()}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <TouchableOpacity style={styles.saveBtn} onPress={handleAddUser}>
-              <Text style={styles.saveBtnText}>Save User</Text>
-            </TouchableOpacity>
-          </ScrollView>
+            ))}
+          </View>
+          <TouchableOpacity style={styles.saveBtn} onPress={handleAddUser}>
+            <Text style={styles.saveBtnText}>Save User</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -424,14 +388,14 @@ export default function AdminScreen({ navigation }) {
       </View>
 
       {/* Recent Visitors */}
-      <View style={styles.card} key={showAllVisitors ? 'all' : 'recent'}>
+      <View style={styles.card}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.cardTitle}>Recent Visitors</Text>
-          <TouchableOpacity onPress={handleToggleViewAll} style={styles.viewAllBtn}>
-            <Text style={styles.viewAllText}>{showAllVisitors ? 'Show Less' : 'View All'}</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Visitors')} style={styles.viewAllBtn}>
+            <Text style={styles.viewAllText}>View All</Text>
           </TouchableOpacity>
+          <Text style={styles.cardTitle}>Recent Visitors</Text>
         </View>
-        {displayVisitors.map(v => (
+        {recentVisitors.map(v => (
           <View key={v._id} style={styles.visitorRow}>
             <View style={styles.visitorDetails}>
               <Text style={styles.visitorName}>{v.firstName} {v.surname}</Text>
@@ -477,10 +441,7 @@ export default function AdminScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f4f6f9' },
-  header: { padding: 20, backgroundColor: '#2c3e50', marginBottom: 15 },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#fff' },
-  subtitle: { fontSize: 14, color: '#bdc3c7', marginTop: 5 },
-  statsRow: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10, justifyContent: 'space-between' },
+  statsRow: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10, justifyContent: 'space-between', marginTop: 10 },
   statCard: { width: '23%', alignItems: 'center', paddingVertical: 12 },
   statValue: { fontSize: 22, fontWeight: 'bold', marginTop: 8, color: '#2c3e50' },
   statLabel: { fontSize: 11, color: '#7f8c8d', textAlign: 'center' },
@@ -492,17 +453,12 @@ const styles = StyleSheet.create({
   actionsRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 10, marginVertical: 5 },
   actionBtn: { flexDirection: 'row', backgroundColor: '#3498db', padding: 12, borderRadius: 30, flex: 0.32, justifyContent: 'center', alignItems: 'center' },
   actionText: { color: '#fff', fontWeight: 'bold', marginLeft: 8, fontSize: 12 },
-  formCard: { backgroundColor: '#fff', margin: 10, padding: 15, borderRadius: 12, maxHeight: 450 },
-  formScrollView: { maxHeight: 380 },
+  formCard: { backgroundColor: '#fff', margin: 10, padding: 15, borderRadius: 12 },
   formTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 12 },
-  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, marginBottom: 10, backgroundColor: '#fff', color: '#000' },
-  passwordContainer: { flexDirection: 'row', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, marginBottom: 10, backgroundColor: '#fff' },
-  passwordInput: { flex: 1, padding: 12, color: '#000' },
-  eyeIcon: { padding: 12 },
+  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, marginBottom: 10 },
   roleRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
   roleBtn: { flex: 1, padding: 8, backgroundColor: '#ecf0f1', marginHorizontal: 4, borderRadius: 8, alignItems: 'center' },
   roleActive: { backgroundColor: '#3498db' },
-  roleBtnText: { fontSize: 11, fontWeight: 'bold' },
   saveBtn: { backgroundColor: '#2ecc71', padding: 12, borderRadius: 8, alignItems: 'center' },
   saveBtnText: { color: '#fff', fontWeight: 'bold' },
   userRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#ecf0f1', paddingVertical: 10 },

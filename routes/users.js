@@ -29,6 +29,10 @@ router.get('/pending', auth, async (req, res) => {
   try {
     const requestingUser = await User.findById(req.user._id);
     
+    if (!requestingUser) {
+      return res.status(404).json({ msg: 'User not found' });
+    }
+    
     // IT admin, security admin, and admin can see pending users
     if (!['it_admin', 'security_admin', 'admin'].includes(requestingUser.role)) {
       return res.status(403).json({ msg: 'Not authorized' });
@@ -46,8 +50,12 @@ router.post('/', auth, async (req, res) => {
   try {
     const requestingUser = await User.findById(req.user._id);
     
-    // IT admin and security admin can create admin, security, reception, security_admin
-    if (requestingUser.role === 'it_admin' || requestingUser.role === 'security_admin') {
+    if (!requestingUser) {
+      return res.status(404).json({ msg: 'User not found' });
+    }
+    
+    // IT admin, security admin, and admin can create admin, security, reception, security_admin
+    if (requestingUser.role === 'it_admin' || requestingUser.role === 'security_admin' || requestingUser.role === 'admin') {
       if (!['admin', 'security', 'reception', 'security_admin'].includes(role)) {
         return res.status(403).json({ msg: 'Can only create admin, security, reception, or security admin' });
       }
@@ -63,7 +71,8 @@ router.post('/', auth, async (req, res) => {
     await user.save();
     res.json({ user: { id: user.id, name, email, role, initials } });
   } catch (err) {
-    res.status(500).json({ msg: 'Server error' });
+    console.error('Error in POST /users:', err);
+    res.status(500).json({ msg: 'Server error', error: err.message });
   }
 });
 
@@ -75,6 +84,10 @@ router.put('/approve/:id', auth, async (req, res) => {
   }
   try {
     const requestingUser = await User.findById(req.user._id);
+    
+    if (!requestingUser) {
+      return res.status(404).json({ msg: 'User not found' });
+    }
     
     // IT admin and security admin can approve admin, security, reception, security_admin
     if (requestingUser.role === 'it_admin' || requestingUser.role === 'security_admin') {
@@ -101,9 +114,13 @@ router.delete('/:id', auth, async (req, res) => {
   try {
     const requestingUser = await User.findById(req.user._id);
     
-    // IT admin and security admin can delete admin, security, reception, security_admin
+    if (!requestingUser) {
+      return res.status(404).json({ msg: 'User not found' });
+    }
+    
+    // IT admin, security admin, and admin can delete admin, security, reception, security_admin
     // But security admin cannot delete it_admin or super_admin
-    if (requestingUser.role === 'it_admin') {
+    if (requestingUser.role === 'it_admin' || requestingUser.role === 'admin') {
       // Can delete anyone except super_admin
       const userToDelete = await User.findById(req.params.id);
       if (userToDelete && userToDelete.role === 'super_admin') {
@@ -121,7 +138,8 @@ router.delete('/:id', auth, async (req, res) => {
     await User.findByIdAndDelete(req.params.id);
     res.json({ msg: 'User deleted' });
   } catch (err) {
-    res.status(500).json({ msg: 'Server error' });
+    console.error('Error in DELETE /users/:id:', err);
+    res.status(500).json({ msg: 'Server error', error: err.message });
   }
 });
 
