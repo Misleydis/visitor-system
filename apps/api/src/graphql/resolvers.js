@@ -188,6 +188,13 @@ const resolvers = {
         buildReq(context, { params: { id } })
       );
     },
+    clearAllVisitors: async (_, __, context) => {
+      requireRoles(context, 'admin');
+      return runController(
+        visitorController.clearAllVisitors,
+        buildReq(context)
+      );
+    },
     timeoutVisitor: async (_, { id }, context) => {
       requireRoles(context, 'security', 'admin');
       return runController(

@@ -145,6 +145,12 @@ export const DELETE_VISITOR = gql`
   }
 `;
 
+export const CLEAR_ALL_VISITORS = gql`
+  mutation ClearAllVisitors {
+    clearAllVisitors { msg }
+  }
+`;
+
 export const TIMEOUT_VISITOR = gql`
   mutation TimeoutVisitor($id: ID!) {
     timeoutVisitor(id: $id) { visitor { _id status timeOut } msg }

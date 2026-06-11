@@ -257,6 +257,8 @@ const typeDefs = `#graphql
     updateVisitor(id: ID!, input: UpdateVisitorInput!): VisitorMutationResponse!
     """DELETE /api/visitors/:id"""
     deleteVisitor(id: ID!): MessageResponse!
+    """DELETE /api/visitors/clear-all"""
+    clearAllVisitors: MessageResponse!
     """PUT /api/visitors/:id/timeout"""
     timeoutVisitor(id: ID!): VisitorMutationResponse!
     """PUT /api/visitors/:id/cancel"""

@@ -29,3 +29,29 @@ exports.deleteVisitor = async (req, res) => {
     res.status(500).json({ msg: 'Server error' });
   }
 };
+
+/*
+ * DELETE /api/visitors/clear-all
+ * Permanently removes all visitor records
+ */
+exports.clearAllVisitors = async (req, res) => {
+  try {
+    const auth = await getAuthContext(req);
+    
+    const result = await Visitor.deleteMany({});
+    
+    await logActivity(
+      auth.id, auth.name, auth.role,
+      'CLEAR_ALL_VISITORS', 'visitor', null,
+      `Cleared all visitors (${result.deletedCount} records deleted)`
+    );
+
+    const io = req.app.get('io');
+    if (io) io.emit('visitors_cleared', { count: result.deletedCount });
+
+    res.json({ msg: `Cleared ${result.deletedCount} visitor records` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+};

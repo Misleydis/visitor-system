@@ -10,7 +10,7 @@ import * as Sharing from 'expo-sharing';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import {
   getAllVisitors, getTodayVisitors, getUsers, createUser, deleteUser,
-  getPendingUsers, approveUser
+  getPendingUsers, approveUser, clearAllVisitors
 } from '../services/api';
 import { LineChart, ProgressChart } from 'react-native-chart-kit';
 
@@ -159,6 +159,21 @@ export default function AdminScreen({ navigation }) {
     } catch (err) {
       Alert.alert('Error', err.response?.data?.msg || 'Approval failed');
     }
+  };
+
+  const handleClearAllVisitors = async () => {
+    Alert.alert('Clear All Visitors', 'Are you sure you want to delete all visitor records? This action cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Clear All', style: 'destructive', onPress: async () => {
+        try {
+          const response = await clearAllVisitors();
+          Alert.alert('Success', response.data.msg);
+          loadData();
+        } catch (err) {
+          Alert.alert('Error', err.response?.data?.msg || 'Failed to clear visitors');
+        }
+      }}
+    ]);
   };
 
   const exportToPDF = async () => {
@@ -334,6 +349,15 @@ export default function AdminScreen({ navigation }) {
         ) : (
           <Text style={styles.noPendingText}>No pending approvals</Text>
         )}
+      </View>
+
+      {/* Clear All Visitors */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Data Management</Text>
+        <TouchableOpacity style={styles.clearBtn} onPress={handleClearAllVisitors}>
+          <MaterialIcons name="delete-sweep" size={20} color="#fff" />
+          <Text style={styles.clearBtnText}>Clear All Visitors</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Daily Progress with Calendar */}
@@ -518,6 +542,8 @@ const styles = StyleSheet.create({
   approveBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginLeft: 4, marginBottom: 4 },
   approveText: { color: '#fff', fontWeight: 'bold', fontSize: 11 },
   noPendingText: { color: '#7f8c8d', fontStyle: 'italic', paddingVertical: 10 },
+  clearBtn: { flexDirection: 'row', backgroundColor: '#e74c3c', padding: 12, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  clearBtnText: { color: '#fff', fontWeight: 'bold', marginLeft: 8 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   viewAllBtn: { backgroundColor: '#3498db', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   viewAllText: { color: '#fff', fontWeight: 'bold', fontSize: 12 },

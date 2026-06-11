@@ -75,6 +75,11 @@ export const deleteVisitor = async (id) => {
   return { data: data.deleteVisitor };
 };
 
+export const clearAllVisitors = async () => {
+  const data = await gqlMutate(ops.CLEAR_ALL_VISITORS);
+  return { data: data.clearAllVisitors };
+};
+
 export const getActivityLogs = async () => {
   const data = await gqlRequest(ops.GET_ACTIVITY_LOGS);
   return { data: data.activityLogs };

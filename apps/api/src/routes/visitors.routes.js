@@ -15,5 +15,6 @@ router.put('/:id/timeout', roleCheck('security', 'admin'), visitorController.tim
 router.put('/:id/cancel', roleCheck('security', 'admin'), visitorController.cancelVisitor);
 router.put('/:id', roleCheck('security'), validate(updateVisitorSchema), visitorController.updateVisitor);
 router.delete('/:id', roleCheck('security', 'admin'), visitorController.deleteVisitor);
+router.delete('/clear-all', roleCheck('admin'), visitorController.clearAllVisitors);
 
 module.exports = router;
